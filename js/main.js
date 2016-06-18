@@ -80,12 +80,35 @@ function initialize_maps() {
     // Initialize the directions renderer.
     directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
     var mapCanvas = $('#map-canvas').get(0);
+    // Define map style
+    var styles = [
+      {
+        stylers: [
+          { hue: "#00ffe6" },
+          { saturation: -20 }
+        ]
+      },{
+        featureType: "road",
+        elementType: "geometry",
+        stylers: [
+          { lightness: 100 },
+          { visibility: "simplified" }
+        ]
+      },{
+        featureType: "road",
+        elementType: "labels",
+        stylers: [
+          { visibility: "off" }
+        ]
+      }
+    ];
     var mapOptions = {
         center: new google.maps.LatLng(37.787930,-122.4074990),
         zoom: 13,
         // Disables zoom and streetview bar but can stil zoom with mouse.
         disableDefaultUI: false,
-        mapTypeId: google.maps.MapTypeId.HYBRID
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        styles: styles
     };
     // Create a google maps object.
     map = new google.maps.Map(mapCanvas, mapOptions);
@@ -174,12 +197,15 @@ function updateRoutes() {
     newPath(path, distance.value);
 }
 
-function newPath(path) {
-        var pathRequest = {
+function newPath(path, distance) {
+    //var samples = distance / 5; // sample approx every 10m
+    
+    var pathRequest = {
         'path': path,
-        'samples': 300
+        'samples': 280
     };
-        // Initiate the path request.
+    
+    // Initiate the path request.
     elevator.getElevationAlongPath(pathRequest, plotElevation);
 }
 // Take an array of elevation result objects, draws a path on the map
@@ -285,34 +311,59 @@ function removePolylines() {
     mapPaths = [];
 }
 
+// Colour functions adapted from http://krazydad.com/tutorials/makecolors.php
+function getColourFromSlope(value)
+{
+    frequency1 = .1;
+    frequency2 = .1;
+    frequency3 = .1;
+    phase1 = 0;
+    phase2 = 2;
+    phase3 = 4;
+    //center = 128;
+//    width = 127;
+    center = 100;
+    width = 150;
+
+    var red = Math.sin(frequency1*value + phase1) * width + center;
+    var grn = Math.sin(frequency2*value + phase2) * width + center;
+    var blu = Math.sin(frequency3*value + phase3) * width + center;
+    return RGB2Color(red,grn,blu);
+}
+function RGB2Color(r,g,b)
+{
+    return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+}
+
 function drawPolyline (elevations, slopes) {
-    // Create a polyline between each elevation, color code by slope.
     // Remove any existing polylines before drawing a new polyline.
     removePolylines();
 
+    // Create a polyline between each elevation, color code by slope.
     for (var i = 0; i < slopes.length; i++) {
         var routePath = [
             elevations[i].location,
             elevations[i+1].location
         ];
         var absSlope = Math.abs(slopes[i].slope);
-        if (absSlope <= 5) {
-            pathColor = "#3CB371";
-        } else if (absSlope <= 10) {
-            pathColor = "#FFFF00";
-        } else if (absSlope <= 15) {
-            pathColor = "#FF9800";
-        } else if (absSlope <= 20) {
-            pathColor = "#F44336";
-        }
-        else {
-            pathColor = "#000000";
-        }
+//        if (absSlope <= 3) {
+//            pathColor = "#3CB371";
+//        } else if (absSlope <= 8) {
+//            pathColor = "#FFFF00";
+//        } else if (absSlope <= 15) {
+//            pathColor = "rgb(255, 152, 0)";
+//        } else if (absSlope <= 30) {
+//            pathColor = "#F44336";
+//        }
+//        else {
+//            pathColor = "#000000";
+//        }
+        strokeWeight = (absSlope * 0.5) +2;
         mapPath = new google.maps.Polyline({
             path: routePath,
-            strokeColor: pathColor,
-            strokeOpacity: 0.8,
-            strokeWeight: 5,
+            strokeColor: getColourFromSlope(slopes[i].slope),
+            strokeOpacity: 1,
+            strokeWeight: strokeWeight,
             draggable: true
         });
         mapPath.setMap(map);
