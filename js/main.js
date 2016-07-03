@@ -98,12 +98,26 @@ function initialize_maps() {
         featureType: "road",
         elementType: "labels",
         stylers: [
+          { lightness: 50 },
+          { visibility: "on" }
+        ]
+      }
+        ,{
+        featureType: "poi",
+        elementType: "labels",
+        stylers: [
           { visibility: "off" }
+        ]
+      },{
+        featureType: "transit",
+        elementType: "all",
+        stylers: [
+          { weight: 5 }
         ]
       }
     ];
     var mapOptions = {
-        center: new google.maps.LatLng(37.787930,-122.4074990),
+        center: new google.maps.LatLng(-36.8485, 174.7633),
         zoom: 13,
         // Disables zoom and streetview bar but can stil zoom with mouse.
         disableDefaultUI: false,
@@ -198,11 +212,18 @@ function updateRoutes() {
 }
 
 function newPath(path, distance) {
-    //var samples = distance / 5; // sample approx every 10m
-    
+//    var samples = Math.ceil(distance / 10); // Sample every 10 metres.. this doesn't seem to work too well.
+//    if (samples > 512) { // Google will only allow a sample of as many as 512 segments, beyond that we need to break it up into seperate requests.
+//        //Recursively break it down..
+//        var mid = Math.floor(path.length / 2);
+//        var dist = Math.floor(distance/2);
+//        newPath(path.slice(0, mid), dist);
+//        newPath(path.slice(mid, path.length), dist);
+//        return;
+//    }
     var pathRequest = {
         'path': path,
-        'samples': 280
+        'samples': 512
     };
     
     // Initiate the path request.
@@ -213,7 +234,7 @@ function newPath(path, distance) {
 function plotElevation(elevations, status) {
     var slope, data, i, slopeChart, elevationChart, slopeChartDiv;
     if (status !== google.maps.ElevationStatus.OK) {
-        alert("Error getting elevation data from Google");
+        console.log("Error getting elevation data from Google");
         return;
     }
     // Create a new chart in the elevation chart div.
@@ -323,7 +344,9 @@ function getColourFromSlope(value)
     //center = 128;
 //    width = 127;
     center = 100;
-    width = 150;
+    width = 150;;
+//    center = 100;
+//    width = 200;
 
     var red = Math.sin(frequency1*value + phase1) * width + center;
     var grn = Math.sin(frequency2*value + phase2) * width + center;
@@ -337,7 +360,7 @@ function RGB2Color(r,g,b)
 
 function drawPolyline (elevations, slopes) {
     // Remove any existing polylines before drawing a new polyline.
-    removePolylines();
+    //removePolylines();
 
     // Create a polyline between each elevation, color code by slope.
     for (var i = 0; i < slopes.length; i++) {
@@ -346,25 +369,16 @@ function drawPolyline (elevations, slopes) {
             elevations[i+1].location
         ];
         var absSlope = Math.abs(slopes[i].slope);
-//        if (absSlope <= 3) {
-//            pathColor = "#3CB371";
-//        } else if (absSlope <= 8) {
-//            pathColor = "#FFFF00";
-//        } else if (absSlope <= 15) {
-//            pathColor = "rgb(255, 152, 0)";
-//        } else if (absSlope <= 30) {
-//            pathColor = "#F44336";
-//        }
-//        else {
-//            pathColor = "#000000";
-//        }
-        strokeWeight = (absSlope * 0.5) +2;
+        if (absSlope > 17){ // This is typically seen on bridges - where slope data causes issues
+        }
+        strokeWeight = (absSlope * 0.4) +2;
         mapPath = new google.maps.Polyline({
             path: routePath,
-            strokeColor: getColourFromSlope(slopes[i].slope),
+            strokeColor: getColourFromSlope(absSlope),
             strokeOpacity: 1,
             strokeWeight: strokeWeight,
-            draggable: true
+            draggable: false,
+            zIndex: absSlope // ensures that steeper areas will show up above flatter segments
         });
         mapPath.setMap(map);
         mapPaths.push(mapPath);
