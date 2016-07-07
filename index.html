@@ -5,6 +5,7 @@
 <!-- Latest compiled and minified CSS -->
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
 	<link rel="stylesheet" type="text/css" href="css/main.css?ver=3">
+    <script type="application/javascript" src="js/rainbowvis.js"></script>
 
 	<title>Flattest Route</title>
 	<meta name="description" content="Put in the start and destination of your route. View the steepness of the roads along the way. You can choose from walking, biking, or driving. As featured in Hacker News.">
@@ -46,6 +47,10 @@
 									<option value="km">Kilometres</option>
 								</select>
 							</div>
+                            <div class="col-xs-6">
+                                <label for="useraw">Elevation sample size (m)</label>
+                                <input id="sampleselect" type="number" value="20" name="quantity" min="1" max="512">
+                            </div>
 						</div>
 
 						<div class="place-input">

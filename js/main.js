@@ -12,6 +12,9 @@ var mapPaths = [];
 var measurementMode;
 var metricUnit = null;
 var feetMultiplicator = null;
+var gradient = new Rainbow();
+gradient.setSpectrum('#1aff53', '#ffc61a','#ff531a');
+gradient.setNumberRange(0, 17);
 // Load the visualization API with the columnchart package.
 google.load("visualization", "1", {packages: ["columnchart"]});
 
@@ -192,6 +195,9 @@ function updateRoutes() {
     console.log("Updating routes");
     // Check if the path has been populated, if it has been already
     // populated, clear it.
+    
+    // Remove any existing polylines before drawing a new polyline.
+    removePolylines();
 
     var routes = this.directions.routes;
     var path = routes[this.routeIndex].overview_path;
@@ -212,18 +218,26 @@ function updateRoutes() {
 }
 
 function newPath(path, distance) {
-//    var samples = Math.ceil(distance / 10); // Sample every 10 metres.. this doesn't seem to work too well.
-//    if (samples > 512) { // Google will only allow a sample of as many as 512 segments, beyond that we need to break it up into seperate requests.
-//        //Recursively break it down..
-//        var mid = Math.floor(path.length / 2);
-//        var dist = Math.floor(distance/2);
-//        newPath(path.slice(0, mid), dist);
-//        newPath(path.slice(mid, path.length), dist);
-//        return;
-//    }
+    if ($('#userawsamples').is(':checked')){
+        var samples = parseInt($("#sampleselect").val()); // Sample every x metres..
+    }else {
+        var samples = Math.ceil(distance / parseInt($("#sampleselect").val())); // Explicitly set amount of samples
+    }
+    
+    if (samples > 512) { // Google will only allow a sample of as many as 512 segments, beyond that we need to break it up into seperate requests.
+        //Recursively break it down..
+        var mid = Math.floor(path.length / 2);
+        var dist = Math.floor(distance/2);
+        newPath(path.slice(0, mid), dist);
+        var millisecondsToWait = 500;
+        setTimeout(function() { // Give the API a moment to breathe
+            newPath(path.slice(mid, path.length), dist);
+        }, millisecondsToWait);
+        return;
+    }
     var pathRequest = {
         'path': path,
-        'samples': 512
+        'samples': samples
     };
     
     // Initiate the path request.
@@ -295,8 +309,9 @@ function plotSlope(elevations){
     // and elevations.length[i+1]
     // Create a slopes array so we can search through it later
     slopes = [];
+    sampledistance = parseInt($("#sampleselect").val());
     for (i = 0; i < elevations.length - 1; i++) {
-        slope = (calcSlope(elevations[i+1].elevation, elevations[i].elevation, distance.value/300)) * 100;
+        slope = (calcSlope(elevations[i+1].elevation, elevations[i].elevation, sampledistance)) * 100;
         map.slopeData.addRow(['', slope]);
         slopes.push({
             slope: slope,
@@ -335,6 +350,7 @@ function removePolylines() {
 // Colour functions adapted from http://krazydad.com/tutorials/makecolors.php
 function getColourFromSlope(value)
 {
+    value = value * 0.7
     frequency1 = .1;
     frequency2 = .1;
     frequency3 = .1;
@@ -359,8 +375,6 @@ function RGB2Color(r,g,b)
 }
 
 function drawPolyline (elevations, slopes) {
-    // Remove any existing polylines before drawing a new polyline.
-    //removePolylines();
 
     // Create a polyline between each elevation, color code by slope.
     for (var i = 0; i < slopes.length; i++) {
@@ -369,12 +383,14 @@ function drawPolyline (elevations, slopes) {
             elevations[i+1].location
         ];
         var absSlope = Math.abs(slopes[i].slope);
-        if (absSlope > 17){ // This is typically seen on bridges - where slope data causes issues
+        if (absSlope > 30){ // This is typically seen on bridges - where slope data causes issues
+            absSlope = 30; // Set 17 to maximum slope. Not helpful to have strangely-coloured massive blotched for these segments.
         }
         strokeWeight = (absSlope * 0.4) +2;
         mapPath = new google.maps.Polyline({
             path: routePath,
-            strokeColor: getColourFromSlope(absSlope),
+//            strokeColor: getColourFromSlope(absSlope),
+            strokeColor: '#'+gradient.colourAt(absSlope),
             strokeOpacity: 1,
             strokeWeight: strokeWeight,
             draggable: false,
