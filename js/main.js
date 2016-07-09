@@ -222,7 +222,9 @@ function updateRoutes() {
     
     // Conditionally emove any existing polylines before drawing a new polyline.
     if (!($('#maintainPath').is(':checked'))){
-        clearInterval(animLoop); // Halt animated crawling polylines
+        if (animLoop){
+            clearInterval(animLoop); // Halt animated crawling polylines
+        }
         removePolylines();
     }
 
