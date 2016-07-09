@@ -13,8 +13,7 @@ var measurementMode;
 var metricUnit = null;
 var feetMultiplicator = null;
 var gradient = new Rainbow();
-gradient.setSpectrum('#1aff53', '#ffc61a','#ff531a');
-gradient.setNumberRange(0, 17);
+var toFromFlag = true;
 // Load the visualization API with the columnchart package.
 google.load("visualization", "1", {packages: ["columnchart"]});
 
@@ -77,7 +76,7 @@ function initialize_maps() {
         draggable: true,
         hideRouteList: true,
         polylineOptions: {
-            strokeOpacity: 0
+            strokeWeight: 0 // Hide the actual path polyline
         }
     };
     // Initialize the directions renderer.
@@ -134,12 +133,37 @@ function initialize_maps() {
     elevator = new google.maps.ElevationService();
 
     // Set up listener to change path elevation information if the user
-    // clicks on another suggested route.
+    // clicks on another suggested route, or drags the A/B markers
     google.maps.event.addListener(
         directionsDisplay,
         'routeindex_changed',
         updateRoutes
     );
+    
+    google.maps.event.addListener(map, "click", function(event){
+        geocode(event.latLng);
+    });
+}
+
+// Set to/from from map click
+function geocode(latlng){
+    var geocoder = new google.maps.Geocoder
+    geocoder.geocode({'location': latlng}, function(results, status) {
+    if (status === google.maps.GeocoderStatus.OK) {
+      if (results[0]) {
+          if (toFromFlag){
+            $("#from").val(results[0].formatted_address);
+          }else{
+            $("#to").val(results[0].formatted_address);
+          }
+          toFromFlag = !toFromFlag;
+      } else {
+        window.alert('No results found');
+      }
+    } else {
+      window.alert('Geocoder failed due to: ' + status);
+    }
+  });
 }
 
 function initAutoComplete(field) {
@@ -196,8 +220,11 @@ function updateRoutes() {
     // Check if the path has been populated, if it has been already
     // populated, clear it.
     
-    // Remove any existing polylines before drawing a new polyline.
-    removePolylines();
+    // Conditionally emove any existing polylines before drawing a new polyline.
+    if (!($('#maintainPath').is(':checked'))){
+        clearInterval(animLoop); // Halt animated crawling polylines
+        removePolylines();
+    }
 
     var routes = this.directions.routes;
     var path = routes[this.routeIndex].overview_path;
@@ -229,8 +256,8 @@ function newPath(path, distance) {
         var mid = Math.floor(path.length / 2);
         var dist = Math.floor(distance/2);
         newPath(path.slice(0, mid), dist);
-        var millisecondsToWait = 500;
-        setTimeout(function() { // Give the API a moment to breathe
+        var millisecondsToWait = 1500;
+        setTimeout(function() { // Give the API a moment to breathe between requests. TODO - this doesn't always work so well. improve it :)
             newPath(path.slice(mid, path.length), dist);
         }, millisecondsToWait);
         return;
@@ -375,29 +402,47 @@ function RGB2Color(r,g,b)
 }
 
 function drawPolyline (elevations, slopes) {
+    
+    //animated
+    var framerate = 1;
+    var i = 0;
+    if (!($('#maintainPath').is(':checked'))){
+        animLoop = setInterval(frame, framerate); // use the 'static' animLoop
+    } else {
+        var newLoop = setInterval(frame, framerate); // create a new animLoop for each path drawn
+    }
+    function frame() {
+        if (i >= slopes.length) {
+          clearInterval(animLoop);
+          clearInterval(newLoop);
+        } else {
+            // Create a polyline between each elevation, color code by slope.
+            var routePath = [
+                elevations[i].location,
+                elevations[i+1].location
+            ];
+            var absSlope = Math.abs(slopes[i].slope);
+            if (absSlope > 30){ // This is typically seen on bridges - where slope data causes issues (slope measuring underlying geography)
+                absSlope = 0;
+            }
+            strokeWeight = 1.7 + (absSlope * 0.3); // Gives a nice min/max stroke weight
+            gradient.setSpectrum('#1aff53', '#ffc61a','#ff531a');
+            gradient.setNumberRange(0, 3);
+            colourValue = Math.log(absSlope);
 
-    // Create a polyline between each elevation, color code by slope.
-    for (var i = 0; i < slopes.length; i++) {
-        var routePath = [
-            elevations[i].location,
-            elevations[i+1].location
-        ];
-        var absSlope = Math.abs(slopes[i].slope);
-        if (absSlope > 30){ // This is typically seen on bridges - where slope data causes issues
-            absSlope = 30; // Set 17 to maximum slope. Not helpful to have strangely-coloured massive blotched for these segments.
+            mapPath = new google.maps.Polyline({
+                path: routePath,
+        //            strokeColor: getColourFromSlope(absSlope),
+                strokeColor: '#'+gradient.colourAt(colourValue),
+                strokeOpacity: 1,
+                strokeWeight: strokeWeight,
+                draggable: false,
+                zIndex: absSlope // ensures that steeper areas will show up above flatter segments
+            });
+            mapPath.setMap(map);
+            mapPaths.push(mapPath);
+            i++;
         }
-        strokeWeight = (absSlope * 0.4) +2;
-        mapPath = new google.maps.Polyline({
-            path: routePath,
-//            strokeColor: getColourFromSlope(absSlope),
-            strokeColor: '#'+gradient.colourAt(absSlope),
-            strokeOpacity: 1,
-            strokeWeight: strokeWeight,
-            draggable: false,
-            zIndex: absSlope // ensures that steeper areas will show up above flatter segments
-        });
-        mapPath.setMap(map);
-        mapPaths.push(mapPath);
     }
 }
 
