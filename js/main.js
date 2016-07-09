@@ -415,8 +415,8 @@ function drawPolyline (elevations, slopes) {
     }
     function frame() {
         if (i >= slopes.length) {
-          clearInterval(animLoop);
-          clearInterval(newLoop);
+            if (animLoop){clearInterval(animLoop); }
+            if (newLoop) {clearInterval(newLoop); }
         } else {
             // Create a polyline between each elevation, color code by slope.
             var routePath = [
