@@ -13,6 +13,7 @@ var measurementMode;
 var metricUnit = null;
 var feetMultiplicator = null;
 var gradient = new Rainbow();
+var animLoop = null;
 var toFromFlag = true;
 // Load the visualization API with the columnchart package.
 google.load("visualization", "1", {packages: ["columnchart"]});
@@ -415,8 +416,8 @@ function drawPolyline (elevations, slopes) {
     }
     function frame() {
         if (i >= slopes.length) {
-            if (animLoop){clearInterval(animLoop); }
-            if (newLoop) {clearInterval(newLoop); }
+            if (animLoop != null){clearInterval(animLoop); }
+            if (newLoop || newLoop != null) {clearInterval(newLoop); }
         } else {
             // Create a polyline between each elevation, color code by slope.
             var routePath = [
