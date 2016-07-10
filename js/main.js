@@ -12,9 +12,12 @@ var mapPaths = [];
 var measurementMode;
 var metricUnit = null;
 var feetMultiplicator = null;
+var sampleSize = 20;
 var gradient = new Rainbow();
 var animLoop = null;
 var toFromFlag = true;
+var radiusMarkers = [];
+var DirectionsService = new google.maps.DirectionsService();
 // Load the visualization API with the columnchart package.
 google.load("visualization", "1", {packages: ["columnchart"]});
 
@@ -76,9 +79,14 @@ function initialize_maps() {
     var rendererOptions = {
         draggable: true,
         hideRouteList: true,
+        preserveViewport: true,
         polylineOptions: {
             strokeWeight: 0 // Hide the actual path polyline
+        },
+        markerOptions: {
+            opacity: 0.0
         }
+        
     };
     // Initialize the directions renderer.
     directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
@@ -142,27 +150,85 @@ function initialize_maps() {
     );
     
     google.maps.event.addListener(map, "click", function(event){
-        geocode(event.latLng);
+        loadRadiusMarkers(event.latLng);
+//        geocode(event.latLng);
     });
 }
 
+// Geometry code from http://stackoverflow.com/questions/2637023/how-to-calculate-the-latlng-of-a-point-a-certain-distance-away-from-another
+Number.prototype.toRad = function() {
+   return this * Math.PI / 180;
+}
+Number.prototype.toDeg = function() {
+   return this * 180 / Math.PI;
+}
+google.maps.LatLng.prototype.destinationPoint = function(brng, dist) {
+   dist = dist / 6371;  
+   brng = brng.toRad();  
+
+   var lat1 = this.lat().toRad(), lon1 = this.lng().toRad();
+
+   var lat2 = Math.asin(Math.sin(lat1) * Math.cos(dist) + 
+                        Math.cos(lat1) * Math.sin(dist) * Math.cos(brng));
+
+   var lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(dist) *
+                                Math.cos(lat1), 
+                                Math.cos(dist) - Math.sin(lat1) *
+                                Math.sin(lat2));
+
+   if (isNaN(lat2) || isNaN(lon2)) return null;
+
+    return new google.maps.LatLng(lat2.toDeg(), lon2.toDeg());
+}
+google.maps.LatLng.prototype.toString = function(){
+   return ""+this.lat()+","+this.lng(); // Text representation of latlng
+}
+
+function loadRadiusMarkers(Glatlng){
+    radius = parseFloat($("#sampleselect").val()); //km
+    division = Math.ceil(radius*10.0);
+    sliceSize = 360 / division;
+    delay = radius*500;
+//    geocode(Glatlng, function(Glatlng, origin){
+//        for (i = 0; i < division; i++){
+//            setTimeout(function(){
+//                geocode(Glatlng.destinationPoint(slice*i, radius), function(loc){
+//                    if (loc) {
+//                        calcRoute(loc, origin);
+//                    }
+//                });
+//            }, i * delay, Glatlng, origin, i);
+//        };
+//    });
+    for (i = 0; i < division; i++){
+        slice = sliceSize*i;
+        var pointLoc = Glatlng.destinationPoint(slice, radius);
+        setTimeout(function(Glatlng, pointLoc){
+                calcRoute(pointLoc.toString(), Glatlng);
+            }, i * delay, Glatlng, pointLoc);
+    };
+    
+}
+
 // Set to/from from map click
-function geocode(latlng){
+function geocode(latlng, callback){
     var geocoder = new google.maps.Geocoder
     geocoder.geocode({'location': latlng}, function(results, status) {
     if (status === google.maps.GeocoderStatus.OK) {
       if (results[0]) {
-          if (toFromFlag){
-            $("#from").val(results[0].formatted_address);
-          }else{
-            $("#to").val(results[0].formatted_address);
-          }
-          toFromFlag = !toFromFlag;
+//          callback("place_id:"+results[0].place_id);
+          callback(latlng, results[0].formatted_address);
+//          if (toFromFlag){
+//            $("#from").val(results[0].formatted_address);
+//          }else{
+//            $("#to").val(results[0].formatted_address);
+//          }
+//          toFromFlag = !toFromFlag;
       } else {
         window.alert('No results found');
       }
     } else {
-      window.alert('Geocoder failed due to: ' + status);
+      console.log('Geocoder failed due to: ' + status);
     }
   });
 }
@@ -179,10 +245,10 @@ function initAutoComplete(field) {
     });
 }
 
-function calcRoute() {
+function calcRoute(start, end) {
     var unitSystem = google.maps.UnitSystem.IMPERIAL;
-    var start = $("#from").val() || $("#from").attr("placeholder");
-    var end = $("#to").val() || $("#to").attr("placeholder");
+//    var start = $("#from").val() || $("#from").attr("placeholder");
+//    var end = $("#to").val() || $("#to").attr("placeholder");
     var travelMode = $("#travel-mode").val();
     if (measurementMode === "km") {
       unitSystem = google.maps.UnitSystem.METRIC;
@@ -193,7 +259,6 @@ function calcRoute() {
         unitSystem: unitSystem,
         travelMode: google.maps.TravelMode[travelMode.toUpperCase()]
     };
-    var DirectionsService = new google.maps.DirectionsService();
     DirectionsService.route(request, function(result, status) {
         if (status === "NOT_FOUND") {
             alert("No directions found.");
@@ -202,9 +267,11 @@ function calcRoute() {
         // Checks region for directions eligibility.
         if (status == google.maps.DirectionsStatus.OK) {
             directionsDisplay.setDirections(result);
+        } else {
+            console.log(status);
         }
     });
-    sharableLink(start, end, travelMode);
+    //sharableLink(start, end, travelMode);
 }
 function sharableLink(start, end, travelMode) {
     // Update url to include sharable link
@@ -217,11 +284,8 @@ function updateRoutes() {
     if (updating) return;
     updating = true;
     setTimeout(function () { updating = false; }, 100);
-    console.log("Updating routes");
-    // Check if the path has been populated, if it has been already
-    // populated, clear it.
     
-    // Conditionally emove any existing polylines before drawing a new polyline.
+    // Conditionally remove any existing polylines before drawing a new polyline.
     if (!($('#maintainPath').is(':checked'))){
         if (animLoop){
             clearInterval(animLoop); // Halt animated crawling polylines
@@ -248,11 +312,12 @@ function updateRoutes() {
 }
 
 function newPath(path, distance) {
-    if ($('#userawsamples').is(':checked')){
-        var samples = parseInt($("#sampleselect").val()); // Sample every x metres..
-    }else {
-        var samples = Math.ceil(distance / parseInt($("#sampleselect").val())); // Explicitly set amount of samples
-    }
+//    if ($('#userawsamples').is(':checked')){
+//        var samples = parseInt($("#sampleselect").val()); // Sample every x metres..
+//    }else {
+//        var samples = Math.ceil(distance / parseInt($("#sampleselect").val())); // Explicitly set amount of samples
+//    }
+    var samples = Math.ceil(distance / sampleSize); // Explicitly set amount of samples
     
     if (samples > 512) { // Google will only allow a sample of as many as 512 segments, beyond that we need to break it up into seperate requests.
         //Recursively break it down..
@@ -339,9 +404,8 @@ function plotSlope(elevations){
     // and elevations.length[i+1]
     // Create a slopes array so we can search through it later
     slopes = [];
-    sampledistance = parseInt($("#sampleselect").val());
     for (i = 0; i < elevations.length - 1; i++) {
-        slope = (calcSlope(elevations[i+1].elevation, elevations[i].elevation, sampledistance)) * 100;
+        slope = (calcSlope(elevations[i+1].elevation, elevations[i].elevation, sampleSize)) * 100;
         map.slopeData.addRow(['', slope]);
         slopes.push({
             slope: slope,
